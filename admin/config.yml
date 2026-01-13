@@ -2,6 +2,7 @@ backend:
   name: github
   repo: jindrichjindrich/decap
   branch: master
+  auth_endpoint: /api/auth
 
 media_folder: "assets/uploads"
 public_folder: "/assets/uploads"
@@ -15,7 +16,7 @@ collections:
         file: "content/homepage.yml"
         fields:
           - { label: "Main title", name: "title", widget: "string" }
-          - { label: "Intro text", name: "intro", widget: "text" }
+          - { label: "Intro text", name: "body", widget: "text" }
           - { label: "CTA button text", name: "cta", widget: "string" }
 
       - label: "About page"

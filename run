@@ -33,16 +33,12 @@ function decap_admin_index_setup() {
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex" />
     <title>Content Manager</title>
-    <!-- Include the script that builds the page and powers Decap CMS -->
-    <script src="https://unpkg.com/decap-cms@latest/dist/decap-cms.js"></script>
   </head>
   <body>
-   <script>
-     window.CMS_GITHUB_TOKEN = "__GITHUB_TOKEN__";
-   </script>
+   <script>window.CMS_GITHUB_TOKEN = "__GITHUB_TOKEN__";</script>
+   <!-- Include the script that builds the page and powers Decap CMS -->
+   <script src="https://unpkg.com/decap-cms@latest/dist/decap-cms.js"></script>
   </body>
 </html>
 EOF
@@ -58,8 +54,6 @@ backend:
   name: github
   repo: $OAUTH_GITHUB_REPO
   branch: master
-  base_url: $ZEBRAFISH_CZ_BASE_URL
-  #auth_endpoint: /api/auth
 
 media_folder: "assets/uploads"
 public_folder: "/assets/uploads"
@@ -73,9 +67,7 @@ collections:
         file: "content/homepage.json"
         fields:
           - { label: "Main title", name: "title", widget: "string" }
-          - { label: "Intro text", name: "intro", widget: "text" }
-          - { label: "CTA button text", name: "cta", widget: "string" }
-
+          - { label: "Intro text", name: "body", widget: "text" }
       - label: "About page"
         name: "about"
         file: "content/about.json"
@@ -210,6 +202,54 @@ function show_env() {
   #echo OAUTH_GITHUB_REPO=$OAUTH_GITHUB_REPO
   echo ZEBRAFISH_CZ_DOMAIN=$ZEBRAFISH_CZ_DOMAIN
   echo ZEBRAFISH_CZ_BASE_URL=$ZEBRAFISH_CZ_BASE_URL
+}
+
+function decap_proxy_install() {
+cd ~/projects
+git clone https://github.com/sterlingwes/decap-proxy.git
+cd decap-proxy
+(cat <<EOF
+name = "decap-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-04-19"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+EOF
+) > wrangler.toml
+
+npm install
+#
+# launch proxy from a local computer to capture communication on port 8976 to be sent to zebradev01 temporary server:
+# ssh -L 8976:localhost:8976 jindrich@zebradev01 ... blocked by firewall
+#
+#
+# can be done only if the browser can be launched on the same computer:
+npx wrangler login
+#... launching a local temporary website at localhost:8976/oatuh/callback, authorizing at dash.cloudflare.com, 
+# redirecting manually to : http://localhost:8976/oauth/callback DID NOT WORK - firewall
+# (if works on local comp, redirecting from there to the local temp website (capturing the token and stops)
+# storing the access token to ~/.wrangler/config/default.toml
+#
+# If working on remote computer, create at dash.cloudflare.com an account using jindrich.jindrich@gmail.com 
+#
+# setting env var CLOUDFLARE_API_TOKEN to ~/.bashrc.d/cloudflare_api_token file
+# Go directly to dash.cloudflare.com, login using jindrich.jindrich@gmail.com
+#   My Profile -> API Tokens 
+#   - template Edit Cloudflare Workers
+#   - Account Resources - select user accounts to include (me, ...)
+#   - add it to .env CLAUDFLARE_API_TOKN
+#   - test that it works: 
+#      curl "https://api.cloudflare.com/client/v4/user/tokens/verify" -H "Authorization: Bearer $CLAUDFLARE_API_TOKEN"
+# I now have https://auth.xdomain.example
+# Update /admin/config.yml to contain base_url: https://auth.xdomain.example
+
+# OAUTH_CLIENT_ID=Iv2...
+# OAUTH_CLIENT_SECRET=
+
+# can be done only if the browser can be launched on the same computer:
+npx wrangler secret put GITHUB_OAUTH_ID
+npx wrangler secret put GITHUB_OAUTH_SECRET
+
 }
 
 load_env
