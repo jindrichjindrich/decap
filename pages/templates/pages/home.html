@@ -1,0 +1,17 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+<h1>{{ hero_title }}</h1>
+
+<div class="hero-text">
+  {{ hero_text|linebreaks }}
+</div>
+
+<a href="/contact/" class="btn">
+  {{ cta_label }}
+</a>
+
+<footer>
+  {{ footer_note }}
+</footer>
+{% endblock %}

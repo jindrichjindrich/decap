@@ -1,0 +1,12 @@
+.help {
+    display: none;
+    background: #f8f9fa;
+    padding: 8px;
+    border-left: 3px solid #4e73df;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+.help.open {
+    display: block;
+}

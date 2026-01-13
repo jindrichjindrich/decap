@@ -2,7 +2,6 @@ backend:
   name: github
   repo: jindrichjindrich/decap
   branch: master
-  auth_endpoint: /api/auth
 
 media_folder: "assets/uploads"
 public_folder: "/assets/uploads"

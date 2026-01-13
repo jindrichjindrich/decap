@@ -1,0 +1,7 @@
+- model: pages.page
+  pk: 1
+  fields:
+    slug: home
+    title: Home Page
+    content_yaml: "hero_title: |\r\n  The hero title\r\ncta_label: CTA Label\r\nfooter_note:
+      Footer note"

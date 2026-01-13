@@ -1,0 +1,10 @@
+/* Hide help text by default */
+.xhelp {
+    display: none;
+}
+
+/* Show when field is focused */
+textarea:focus + .xhelp,
+input:focus + .xhelp {
+    display: block;
+}
