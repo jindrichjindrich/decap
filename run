@@ -1,0 +1,28 @@
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export SCRIPT_DIR
+
+function selinux_enable() {
+  # For a specific user's directory (e.g., /home/username/public_html)
+  sudo semanage fcontext -a -t httpd_sys_content_t "$SCRIPT_DIR(/.*)?"
+  sudo restorecon -Rv $SCRIPT_DIR
+}
+
+function nginx_conf() {
+  (cat <<EOF
+server {
+  listen 80;
+  server_name test.zebrabase.org;
+  location / {
+    root /home/jindrich/projects/decap ;
+  }
+}
+EOF
+) | sudo tee /etc/nginx/conf.d/test.zebrabase.org.conf
+sudo systemctl restart nginx
+}
+
+function git_init() {
+  git init
+  git remote add origin git@github.com:jindrichjindrich/decap.git
+}
