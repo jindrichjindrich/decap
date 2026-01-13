@@ -1,0 +1,26 @@
+backend:
+  name: github
+  repo: jindrichjindrich/decap
+  branch: master
+
+media_folder: "assets/uploads"
+public_folder: "/assets/uploads"
+
+collections:
+  - name: "pages"
+    label: "Pages"
+    files:
+      - label: "Homepage"
+        name: "homepage"
+        file: "content/homepage.yml"
+        fields:
+          - { label: "Main title", name: "title", widget: "string" }
+          - { label: "Intro text", name: "intro", widget: "text" }
+          - { label: "CTA button text", name: "cta", widget: "string" }
+
+      - label: "About page"
+        name: "about"
+        file: "content/about.yml"
+        fields:
+          - { label: "Title", name: "title", widget: "string" }
+          - { label: "Body text", name: "body", widget: "text" }

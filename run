@@ -1,6 +1,14 @@
+# CONFIGURATION SCRIPT/BASH FUNCTION FOR INSTALLING DECAP CMS
+# Place this script into the root of your static site, modify:
+#  - the below ENVIRONMENTAL variables 
+#  - .env file with secrets for OAUTH
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export SCRIPT_DIR
+
+export ZEBRAFISH_CZ_DOMAIN=test.zebrabase.org
+export ZEBRAFISH_CZ_BASE_URL=https://$ZEBRAFISH_CZ_DOMAIN
+export OAUTH_GITHUB_REPO=jindrichjindrich/decap
 
 function selinux_enable() {
   # For a specific user's directory (e.g., /home/username/public_html)
@@ -8,21 +16,200 @@ function selinux_enable() {
   sudo restorecon -Rv $SCRIPT_DIR
 }
 
-function nginx_conf() {
+function git_init() {
+  git init
+  git remote add origin git@github.com:${OAUTH_GITHUB_REPO}.git
+  git pull origin master
+}
+
+function decap_admin_index_setup() {
+  # https://decapcms.org/docs/install-decap-cms/
+  cd $SCRIPT_DIR
+  mkdir -p admin
+  cd admin
+
+  (cat <<EOF
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Content Manager</title>
+    <!-- Include the script that builds the page and powers Decap CMS -->
+    <script src="https://unpkg.com/decap-cms@latest/dist/decap-cms.js"></script>
+  </head>
+  <body>
+   <script>
+     window.CMS_GITHUB_TOKEN = "__GITHUB_TOKEN__";
+   </script>
+  </body>
+</html>
+EOF
+) > index.html
+}
+
+function decap_admin_config_setup() {
+  cd $SCRIPT_DIR
+  mkdir -p admin
+  cd admin
+  (cat <<EOF
+backend:
+  name: github
+  repo: $OAUTH_GITHUB_REPO
+  branch: master
+  base_url: $ZEBRAFISH_CZ_BASE_URL
+  #auth_endpoint: /api/auth
+
+media_folder: "assets/uploads"
+public_folder: "/assets/uploads"
+
+collections:
+  - name: "pages"
+    label: "Pages"
+    files:
+      - label: "Homepage"
+        name: "homepage"
+        file: "content/homepage.json"
+        fields:
+          - { label: "Main title", name: "title", widget: "string" }
+          - { label: "Intro text", name: "intro", widget: "text" }
+          - { label: "CTA button text", name: "cta", widget: "string" }
+
+      - label: "About page"
+        name: "about"
+        file: "content/about.json"
+        fields:
+          - { label: "Title", name: "title", widget: "string" }
+          - { label: "Body text", name: "body", widget: "text" }
+EOF
+) > config.yml
+
+}
+
+function github_oauth() {
+  echo "NOT USED"
+  echo "create github OAuth application (Settings -> Developer Settings):"
+  echo "https://github.com/settings/apps/zebrafish-cz-decap-cms"
+  echo "GitHub App name: Zebrafish.cz Decap CMS"
+  echo "App ID: 2648260"
+  echo "for client id and client secret see .env file "
+}
+
+function load_env() {
+  set -a; . .env ; set +a
+}
+
+function docker_decap_run() {
+  # NOT USED
+  # ORIGIN - comma separated list of origins that login can succeed on
+  docker run -d \
+  --name decap-cms \
+  -p 3000:80 \
+  -e "ORIGIN=$ZEBRAFISH_CZ_BASE_URL,$ZEBRAFISH_CZ_BASE_URL" \
+  -e "ORIGINS=$ZEBRAFISH_CZ_BASE_URL,$ZEBRAFISH_CZ_BASE_URL" \
+  -e "OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID" \
+  -e "OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET" \
+  -e "OAUTH_GITHUB_REPO=$OAUTH_GITHUB_REPO" \
+  -v ${SCRIPT_DIR}/admin/config.yml:/app/config.yml:ro \
+  --restart unless-stopped \
+  itsmejoeeey/docker-decap-cms-standalone:latest
+  echo "Stared docker container decap-cms with env vars ORIGINS, ORIGIN=$ZEBRAFISH_CZ_BASE_URL,$ZEBRAFISH_CZ_BASE_URL"
+}
+function docker_decap_restart() {
+  # NOT USED
+  docker stop decap-cms
+  docker rm decap-cms
+  docker_decap_run
+}
+
+function nginx_write_conf() {
+  # create nginx conf file for the $ZEBRAFISH_CZ_DOMAIN
   (cat <<EOF
 server {
   listen 80;
-  server_name test.zebrabase.org;
+
+  server_name $ZEBRAFISH_CZ_DOMAIN ;
+
+  add_header Strict-Transport-Security "max-age=31536000" always;
+
   location / {
-    root /home/jindrich/projects/decap ;
+    root $SCRIPT_DIR ;
+  }
+
+  location ^~ /admin/ {
+    auth_basic "Editors only";
+    auth_basic_user_file /etc/nginx/.decap_htpasswd;
+
+    root $SCRIPT_DIR;
+    index index.html
+
+    # IMPORTANT: disable gzip so sub_filter works
+    gzip off;
+    
+    # add to /etc/nginx/mime.types !!!
+    #  application/x-yaml yml yaml; 
+    
+    # inject github token
+    sub_filter '__GITHUB_TOKEN__' '$GITHUB_TOKEN';
+    sub_filter_once on;
+    sub_filter_types text/html application/javascript;
+
+    # force index.html for spa
+    try_files \$uri \$uri/ /admin/index.html;
   }
 }
 EOF
-) | sudo tee /etc/nginx/conf.d/test.zebrabase.org.conf
-sudo systemctl restart nginx
+) | sudo tee /etc/nginx/conf.d/${ZEBRAFISH_CZ_DOMAIN}.conf
+
+  #sudo semanage fcontext -a -t httpd_sys_content_t "/etc/nginx/.decap_htpasswd"
+  #sudo restorecon /etc/nginx/.decap_htpasswd
+
+  sudo systemctl restart nginx
+  echo "Rewritten conf file /etc/nginx/conf.d/${ZEBRAFISH_CZ_DOMAIN}.conf, restarted nginx"
 }
 
-function git_init() {
-  git init
-  git remote add origin git@github.com:jindrichjindrich/decap.git
+function nginx_pwd_install() {
+  # install htpasswd program used in 'nginx_passwd' function
+  sudo dnf install -y nginx httpd-tools policycoreutils-python-utils
 }
+
+function nginx_perm() {
+   # set the permission for the nginx to be able modify the content files
+   sudo chown -R nginx:jindrich $SCRIPT_DIR/content
+}
+
+function nginx_passwd() {
+  # set the username (jindrich by default)/ password for accessing the /admin folder
+  user=$1
+  if [ -z $user ]; then
+    user=jindrich
+  fi # decap related pwd
+  sudo htpasswd -c /etc/nginx/.decap_htpasswd $user
+}
+
+function github_token() {
+  # show how to generate/update the github token used to push the changed content files
+  echo "GitHub token must be generated every 90 days and writting to .env file"
+  echo "Procedure: https://github.com -> login -> Settings -> Developer Settings -> Personal access tokens -> Fine-grained tokens"
+  echo "There set: "
+  echo "  Token name: Decap"
+  echo "  Expiration: 90 days (Mon, Apr 13 2026)"
+  echo "  Selected Repositories: decap "
+  echo "  Permission: Contents - Read and Write"
+  echo "Generate token, then copy it (rewrite) to .env - GITHUB_TOKEN"
+  echo "Then:"
+  echo " . run && nginx_conf"
+  echo " ... it will rewrite the nginx conf file (containing the token) and restart nginx."
+}
+
+function show_env() {
+  # Show the available/defined environmental variables (from .env or defined in run)
+  #echo OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID
+  #echo OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET
+  #echo OAUTH_GITHUB_REPO=$OAUTH_GITHUB_REPO
+  echo ZEBRAFISH_CZ_DOMAIN=$ZEBRAFISH_CZ_DOMAIN
+  echo ZEBRAFISH_CZ_BASE_URL=$ZEBRAFISH_CZ_BASE_URL
+}
+
+load_env
